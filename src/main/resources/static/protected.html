@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Защищенные данные</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        #protectedData {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<h2>Защищенные данные</h2>
+
+<button id="getData">Получить данные</button>
+
+<div id="protectedData"></div>
+<div id="error"></div>
+
+<script>
+    // Проверка, авторизован ли пользователь
+    if (!localStorage.getItem('jwt')) {
+        alert('Пожалуйста, авторизуйтесь');
+        window.location.href = '/'; // Перенаправление на страницу авторизации
+    }
+
+    // Обработчик для кнопки "Получить данные"
+    document.getElementById('getData').addEventListener('click', async () => {
+        const token = localStorage.getItem('jwt'); // Получаем токен из localStorage
+
+        if (!token) {
+            document.getElementById('error').textContent = 'Токен не найден! Пожалуйста, авторизуйтесь.';
+            return;
+        }
+
+        try {
+            // Отправляем запрос на защищенные данные
+            const response = await fetch('http://localhost:8081/api/protected', {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token // Передаем токен в заголовке
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('protectedData').textContent = JSON.stringify(data, null, 2);
+            } else {
+                const data = await response.json();
+                document.getElementById('error').textContent = 'Ошибка: ' + (data.message || 'Не удалось получить данные');
+            }
+        } catch (error) {
+            document.getElementById('error').textContent = 'Ошибка: ' + error.message;
+        }
+    });
+</script>
+</body>
+</html>
