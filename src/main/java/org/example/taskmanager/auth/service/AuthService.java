@@ -1,45 +1,52 @@
 package org.example.taskmanager.auth.service;
 
-import org.example.taskmanager.auth.model.User;
-import org.example.taskmanager.auth.repo.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.example.taskmanager.auth.dtos.JwtRequest;
+import org.example.taskmanager.auth.dtos.JwtResponse;
+import org.example.taskmanager.auth.dtos.RegistrationUserDto;
+import org.example.taskmanager.auth.dtos.UserDto;
+import org.example.taskmanager.auth.entities.User;
+import org.example.taskmanager.auth.exceptions.AppError;
+import org.example.taskmanager.auth.utils.JwtTokenUtil;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RequestBody;
 
 /**
  * @author batal
- * @Date 10.02.2025
+ * @Date 12.02.2025
  */
 @Service
+@RequiredArgsConstructor
 public class AuthService {
+    private final UserService userService;
+    private final JwtTokenUtil jwtTokenUtil;
+    private final AuthenticationManager authenticationManager;
 
-    @Autowired
-    private JWTService jwtService;
-
-    @Autowired
-    AuthenticationManager authManager;
-
-    @Autowired
-    private UserRepository repo;
-
-
-    private BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
-
-    public User register(User user) {
-        user.setPassword(encoder.encode(user.getPassword()));
-        repo.save(user);
-        return user;
+    public ResponseEntity<?> createAuthToken(@RequestBody JwtRequest authRequest) {
+        try {
+            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
+        } catch (BadCredentialsException e){
+            return new ResponseEntity<>(new AppError(HttpStatus.UNAUTHORIZED.value(), "Неправильный логин или пароль"), HttpStatus.UNAUTHORIZED);
+        }
+        UserDetails userDetails = userService.loadUserByUsername(authRequest.getUsername());
+        String token = jwtTokenUtil.generateToken(userDetails);
+        return ResponseEntity.ok(new JwtResponse(token));
     }
 
-    public String verify(User user) {
-        Authentication authentication = authManager.authenticate(new UsernamePasswordAuthenticationToken(user.getEmail(), user.getPassword()));
-        if (authentication.isAuthenticated()) {
-            return jwtService.generateToken(user.getEmail());
-        } else {
-            return "fail";
+    public ResponseEntity<?> createNewUser(@RequestBody RegistrationUserDto registrationUserDto){
+        if(!registrationUserDto.getPassword().equals(registrationUserDto.getConfirmPassword())){
+            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пароли не совпадают"), HttpStatus.BAD_REQUEST);
         }
+        if(userService.findByUsername(registrationUserDto.getUsername()).isPresent()){
+            return new ResponseEntity<>(new AppError(HttpStatus.BAD_REQUEST.value(), "Пользователь с указанным именем уже существует"), HttpStatus.BAD_REQUEST);
+        }
+        User user = userService.createNewUser(registrationUserDto);
+        return ResponseEntity.ok(new UserDto(user.getId(), user.getUsername(), user.getEmail()));
     }
 }
